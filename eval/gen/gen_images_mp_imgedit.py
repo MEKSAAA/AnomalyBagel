@@ -21,15 +21,21 @@ from PIL import Image
 from modeling.bagel.qwen2_navit import NaiveCache
 
 
-# 分布式初始化函数
 def setup_distributed():
-    """初始化分布式环境"""
     dist.init_process_group(backend="nccl")
     torch.cuda.set_device(int(os.environ["LOCAL_RANK"]))
 
 
 SYSTEM_PROMPT = '''You should first think about the planning process in the mind and then generate the image. 
 The planning process is enclosed within <think> </think> tags, i.e. <think> planning process here </think> image here'''
+
+
+def move_generation_input_to_device(generation_input, device):
+    # Utility to move all tensors in generation_input to device
+    for k, v in generation_input.items():
+        if isinstance(v, torch.Tensor):
+            generation_input[k] = v.to(device)
+    return generation_input
 
 
 def apply_scale(width, height, scale):
@@ -50,7 +56,7 @@ def editing_image_with_think(
     cfg_interval=[0, 1.0], cfg_renorm_min=0., 
     cfg_type="serial_text_img", cfg_renorm_type="text_channel", 
     timestep_shift=3.0, max_image_size=1024, min_image_size=512, img_size=None,
-    max_length=2048, simple_think=False,
+    max_length=2048, simple_think=False, device=None
 ):
     # set output size
     if img_size is None:
@@ -77,6 +83,7 @@ def editing_image_with_think(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input = move_generation_input_to_device(generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         past_key_values = gen_model.forward_cache_update_text(past_key_values, **generation_input)  
     
@@ -91,6 +98,7 @@ def editing_image_with_think(
             new_token_ids=new_token_ids,
             #timestep=0.0,
         )
+        generation_input = move_generation_input_to_device(generation_input, device)
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
             past_key_values = gen_model.forward_cache_update_vae(vae_model, past_key_values, **generation_input)
 
@@ -102,6 +110,7 @@ def editing_image_with_think(
             transforms=vit_transform, 
             new_token_ids=new_token_ids,
         )
+        generation_input = move_generation_input_to_device(generation_input, device)
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
             past_key_values = gen_model.forward_cache_update_vit(past_key_values, **generation_input)
         
@@ -116,10 +125,12 @@ def editing_image_with_think(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    tmp_generation_input = move_generation_input_to_device(tmp_generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         tmp_past_key_values = gen_model.forward_cache_update_text(tmp_past_key_values, **tmp_generation_input)  
     
     tmp_generation_input = gen_model.prepare_start_tokens(tmp_newlens, tmp_new_rope, new_token_ids)
+    tmp_generation_input = move_generation_input_to_device(tmp_generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         unpacked_latent = gen_model.generate_text(
             past_key_values=tmp_past_key_values,
@@ -149,6 +160,7 @@ def editing_image_with_think(
         curr_rope=new_rope, 
         image_sizes=[(h, w)], 
     )
+    generation_input_cfg_text = move_generation_input_to_device(generation_input_cfg_text, device)
     
     ##########  cfg_img
     cfg_img_past_key_values = NaiveCache(gen_model.config.llm_config.num_hidden_layers)
@@ -163,6 +175,7 @@ def editing_image_with_think(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         cfg_img_past_key_values = gen_model.forward_cache_update_text(cfg_img_past_key_values, **generation_input_cfg_img)
     
@@ -173,6 +186,7 @@ def editing_image_with_think(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         cfg_img_past_key_values = gen_model.forward_cache_update_text(cfg_img_past_key_values, **generation_input_cfg_img)
     
@@ -184,6 +198,7 @@ def editing_image_with_think(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         cfg_img_past_key_values = gen_model.forward_cache_update_text(cfg_img_past_key_values, **generation_input_cfg_img)
     
@@ -192,6 +207,7 @@ def editing_image_with_think(
         curr_rope=cfg_img_new_rope, 
         image_sizes=[(h, w)], 
     )
+    generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
     
     ##########  origin
     generation_input, newlens, new_rope = gen_model.prepare_prompts(
@@ -201,6 +217,7 @@ def editing_image_with_think(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input = move_generation_input_to_device(generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         past_key_values = gen_model.forward_cache_update_text(past_key_values, **generation_input)  
     
@@ -212,6 +229,7 @@ def editing_image_with_think(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input = move_generation_input_to_device(generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         past_key_values = gen_model.forward_cache_update_text(past_key_values, **generation_input)  
     
@@ -221,7 +239,7 @@ def editing_image_with_think(
         image_sizes=[(h, w)], 
         new_token_ids=new_token_ids,
     )
-    
+    generation_input = move_generation_input_to_device(generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         unpacked_latent = gen_model.generate_image(
             past_key_values=past_key_values,
@@ -262,7 +280,7 @@ def editing_image(
     cfg_text_scale=4.0, cfg_img_scale=2.0,
     cfg_interval=[0, 1.0], cfg_renorm_min=0., 
     cfg_type="serial_text_img", cfg_renorm_type="text_channel", 
-    timestep_shift=3.0, max_image_size=1024, min_image_size=512, img_size=None,
+    timestep_shift=3.0, max_image_size=1024, min_image_size=512, img_size=None, device=None,
 ):
     # set output size
     if img_size is None:
@@ -291,6 +309,7 @@ def editing_image(
             transforms=vae_transform, 
             new_token_ids=new_token_ids,
         )
+        generation_input = move_generation_input_to_device(generation_input, device)
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
             past_key_values = gen_model.forward_cache_update_vae(vae_model, past_key_values, **generation_input)
 
@@ -302,6 +321,7 @@ def editing_image(
             transforms=vit_transform, 
             new_token_ids=new_token_ids,
         )
+        generation_input = move_generation_input_to_device(generation_input, device)
         with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
             past_key_values = gen_model.forward_cache_update_vit(past_key_values, **generation_input)
 
@@ -312,6 +332,7 @@ def editing_image(
         curr_rope=new_rope, 
         image_sizes=[(h, w)], 
     )
+    generation_input_cfg_text = move_generation_input_to_device(generation_input_cfg_text, device)
     # cfg_img
     cfg_img_past_key_values = NaiveCache(gen_model.config.llm_config.num_hidden_layers)
     cfg_img_newlens = [0]
@@ -323,6 +344,7 @@ def editing_image(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         cfg_img_past_key_values = gen_model.forward_cache_update_text(cfg_img_past_key_values, **generation_input_cfg_img)
     generation_input_cfg_img = gen_model.prepare_vae_latent_cfg(
@@ -330,6 +352,7 @@ def editing_image(
         curr_rope=cfg_img_new_rope, 
         image_sizes=[(h, w)], 
     )
+    generation_input_cfg_img = move_generation_input_to_device(generation_input_cfg_img, device)
     
     # origin
     generation_input, newlens, new_rope = gen_model.prepare_prompts(
@@ -339,6 +362,7 @@ def editing_image(
         tokenizer=tokenizer, 
         new_token_ids=new_token_ids,
     )
+    generation_input = move_generation_input_to_device(generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         past_key_values = gen_model.forward_cache_update_text(past_key_values, **generation_input)  
     generation_input = gen_model.prepare_vae_latent(
@@ -347,7 +371,7 @@ def editing_image(
         image_sizes=[(h, w)], 
         new_token_ids=new_token_ids,
     )
-    
+    generation_input = move_generation_input_to_device(generation_input, device)
     with torch.amp.autocast("cuda", enabled=True, dtype=torch.bfloat16):
         unpacked_latent = gen_model.generate_image(
             past_key_values=past_key_values,
@@ -508,6 +532,7 @@ if __name__ == "__main__":
                 num_timesteps=num_timesteps,
                 max_length=2048, 
                 simple_think=False, 
+                device=device,
             )
             with open(outpath.replace(".png", ".txt"), "w") as f:
                 f.write(think_output)
@@ -521,6 +546,7 @@ if __name__ == "__main__":
                 cfg_renorm_min=cfg_renorm_min,
                 timestep_shift=timestep_shift, 
                 num_timesteps=num_timesteps,
+                device=device,
             )
 
         tmpimage = tmpimage.crop(tmpimage.getbbox())

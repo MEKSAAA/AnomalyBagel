@@ -123,6 +123,7 @@ Directly run `scripts/eval/run_kris.sh` to evaluate KRIS-Bench. The output will 
 - Set `$openai_api_key` in `scripts/eval/run_kris.sh` and `your_api_url` in `eval/gen/kris/metrics_xx.py`. The default GPT version is `gpt-4o-2024-11-20`.
 - Use `think` for thinking mode.
 - We set `cfg_text_scale=4` and `cfg_img_scale=1.5` by default. Additionally, `cfg_renorm_min=0` is specified for CFG Renorm.
+- Our evaluation results can be found in [BAGEL_results](https://huggingface.co/datasets/Andy1621/BAGEL_results).
 
 <details>
 <summary><b>Results</b></summary>
@@ -253,6 +254,7 @@ Directly run `scripts/eval/run_rise.sh` to evaluate RISEBench. The output will b
 - Set `$openai_api_key` in `scripts/eval/run_rise.sh` and `your_api_url` in `eval/gen/rise/gpt_eval.py`. The default GPT version is `gpt-4.1-2025-04-14`.
 - Use `think` for thinking mode.
 - We set `cfg_text_scale=4` and `cfg_img_scale=2.0` by default. Additionally, `cfg_renorm_min=0` is specified for CFG Renorm.
+- Our evaluation results can be found in [BAGEL_results](https://huggingface.co/datasets/Andy1621/BAGEL_results).
 
 <details>
 <summary><b>Results (cfg_img_scale=1.5)</b></summary>
@@ -369,6 +371,7 @@ Directly run `scripts/eval/run_imgedit.sh` to evaluate ImgEdit-Bench. The output
 - Set `$model_path` and `$output_path` for the path for checkpoint and log.
 - Set `$openai_api_key` in `scripts/eval/run_imgedit.sh` and `your_api_url` in `eval/gen/imgedit/basic_bench.py`. The default GPT version is `gpt-4o-2024-11-20`.
 - We set `cfg_text_scale=4` and `cfg_img_scale=1.5` by default. Additionally, `cfg_renorm_min=0` is specified for CFG Renorm.
+- Our evaluation results can be found in [BAGEL_results](https://huggingface.co/datasets/Andy1621/BAGEL_results).
 
 <details>
 <summary><b>Results</b></summary>
